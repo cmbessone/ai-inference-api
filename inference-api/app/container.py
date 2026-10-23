@@ -7,10 +7,35 @@ Redis, el proveedor LLM o el runtime de ML sin tocar la lógica, y testear con d
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from redis.asyncio import Redis
+
 from app.config import Settings
+from app.core.auth import KeyStore, StaticKeyStore, parse_api_keys
+from app.core.cache import RedisCache, RedisLock
+from app.core.circuit_breaker import (
+    BreakerPolicy,
+    CircuitBreaker,
+    FallbackBreakerStore,
+    InMemoryBreakerStore,
+    RedisBreakerStore,
+)
 from app.core.clock import Clock, SystemClock
+from app.core.llm_client import ResilientLLMClient, RetryPolicy
+from app.core.observability.metrics import Metrics
+from app.core.ports import LLMProvider
+from app.core.providers import build_provider
+from app.core.rate_limiter import (
+    FallbackRateLimiter,
+    InMemoryRateLimiter,
+    RateLimiter,
+    RateLimitPolicy,
+    RedisRateLimiter,
+)
+from app.core.redis_gateway import RedisGateway
+from app.services.inference import CoalescingPolicy, InferenceService
 
 
 @dataclass
@@ -24,12 +49,106 @@ class Lifecycle:
 @dataclass
 class Container:
     settings: Settings
-    clock: Clock = field(default_factory=SystemClock)
+    clock: Clock
+    metrics: Metrics
+    redis: RedisGateway
+    key_store: KeyStore
+    rate_limiter: RateLimiter
+    llm: ResilientLLMClient
+    inference: InferenceService
     lifecycle: Lifecycle = field(default_factory=Lifecycle)
 
     @classmethod
-    async def build(cls, settings: Settings) -> Container:
-        return cls(settings=settings)
+    async def build(
+        cls,
+        settings: Settings,
+        *,
+        metrics: Metrics | None = None,
+        clock: Clock | None = None,
+        redis_client: Redis | None = None,
+        provider: LLMProvider | None = None,
+    ) -> Container:
+        clock = clock or SystemClock()
+        metrics = metrics or Metrics()
+
+        redis = (
+            RedisGateway(
+                redis_client,
+                clock,
+                settings.redis_failure_threshold,
+                settings.redis_cooldown_s,
+            )
+            if redis_client is not None
+            else RedisGateway.from_url(
+                settings.redis_url,
+                clock,
+                socket_timeout_s=settings.redis_socket_timeout_s,
+                max_connections=settings.redis_max_connections,
+                failure_threshold=settings.redis_failure_threshold,
+                cooldown_s=settings.redis_cooldown_s,
+            )
+        )
+
+        def fallback_counter(component: str) -> Callable[[], None]:
+            def increment() -> None:
+                metrics.redis_fallback.labels(component).inc()
+
+            return increment
+
+        rate_policy = RateLimitPolicy(settings.rate_limit_requests, settings.rate_limit_window_s)
+        rate_limiter = FallbackRateLimiter(
+            RedisRateLimiter(redis, rate_policy, clock),
+            InMemoryRateLimiter(rate_policy, clock),
+            on_fallback=fallback_counter("rate_limit"),
+        )
+
+        breaker_policy = BreakerPolicy(
+            failure_threshold=settings.cb_failure_threshold,
+            window_s=settings.cb_window_s,
+            open_s=settings.cb_open_s,
+            probe_ttl_s=settings.llm_default_timeout_s,
+        )
+        breaker = CircuitBreaker(
+            FallbackBreakerStore(
+                RedisBreakerStore(redis, breaker_policy),
+                InMemoryBreakerStore(breaker_policy),
+            ),
+            clock,
+        )
+        llm = ResilientLLMClient(
+            provider or build_provider(settings),
+            breaker,
+            clock,
+            metrics,
+            max_concurrency=settings.llm_max_concurrency,
+            queue_timeout_s=settings.llm_queue_timeout_s,
+            retry=RetryPolicy(
+                max_retries=settings.llm_max_retries,
+                base_delay_s=settings.llm_retry_base_delay_s,
+            ),
+        )
+        inference = InferenceService(
+            llm,
+            RedisCache(redis, on_fallback=fallback_counter("cache")),
+            RedisLock(redis),
+            clock,
+            metrics,
+            CoalescingPolicy(
+                cache_ttl_s=settings.cache_ttl_s,
+                lock_ttl_s=settings.single_flight_lock_ttl_s,
+                max_wait_s=settings.single_flight_wait_s,
+            ),
+        )
+        return cls(
+            settings=settings,
+            clock=clock,
+            metrics=metrics,
+            redis=redis,
+            key_store=StaticKeyStore(parse_api_keys(settings.api_keys.get_secret_value())),
+            rate_limiter=rate_limiter,
+            llm=llm,
+            inference=inference,
+        )
 
     async def start(self) -> None:
         self.lifecycle.ready = True
@@ -37,3 +156,5 @@ class Container:
     async def aclose(self) -> None:
         self.lifecycle.shutting_down = True
         self.lifecycle.ready = False
+        await self.llm.aclose()
+        await self.redis.aclose()

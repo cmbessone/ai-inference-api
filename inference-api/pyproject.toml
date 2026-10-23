@@ -46,6 +46,7 @@ select = [
 ]
 ignore = [
     "PLR0913",  # constructores de composition root reciben muchas dependencias a propósito
+    "PLR0917",  # ídem (inyección por constructor)
     "TRY003",   # mensajes de error descriptivos inline
     "PLR2004",  # números mágicos en tests
 ]

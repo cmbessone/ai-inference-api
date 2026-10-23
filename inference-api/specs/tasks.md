@@ -9,16 +9,16 @@ Cada tarea referencia los criterios de aceptación que cubre. `[x]` = implementa
 - [x] T04 `create_app()` + `lifespan` + `/health/live` (OB-AC05)
 
 ## PR #2 — R1 inferencia sincrónica
-- [ ] T05 Puertos (`core/ports.py`) y errores de dominio
-- [ ] T06 `RedisGateway` con timeout + breaker local (RS-AC11)
-- [ ] T07 Autenticación por API key hasheada (R1-AC01..03)
-- [ ] T08 Ventana deslizante pura + Lua + fallback local (R1-AC04..08)
-- [ ] T09 `cache_key()` pura + `RedisCache` (R1-AC09..12)
-- [ ] T10 Circuit breaker: máquina de estados pura + stores Redis/memoria (RS-AC01..08)
-- [ ] T11 `ResilientLLMClient`: breaker, timeout, bulkhead, retry con jitter (R1-AC15, R1-AC16, RS-AC09, RS-AC12)
-- [ ] T12 Proveedores `mock` y `openai` + factory
-- [ ] T13 Single-flight local + distribuido (R1-AC17)
-- [ ] T14 `InferenceService` + ruta `/v1/infer` (R1-AC13, R1-AC14)
+- [x] T05 Puertos (`core/ports.py`) y errores de dominio
+- [x] T06 `RedisGateway` con timeout + breaker local (RS-AC11)
+- [x] T07 Autenticación por API key hasheada (R1-AC01..03)
+- [x] T08 Ventana deslizante pura + Lua + fallback local (R1-AC04..08)
+- [x] T09 `cache_key()` pura + `RedisCache` (R1-AC09..12)
+- [x] T10 Circuit breaker: máquina de estados pura + stores Redis/memoria (RS-AC01..08)
+- [x] T11 `ResilientLLMClient`: breaker, timeout, bulkhead, retry con jitter (R1-AC15, R1-AC16, RS-AC09, RS-AC12)
+- [x] T12 Proveedores `mock` y `openai` + factory
+- [x] T13 Single-flight local + distribuido (R1-AC17)
+- [x] T14 `InferenceService` + ruta `/v1/infer` (R1-AC13, R1-AC14)
 
 ## PR #3 — R2 streaming
 - [ ] T15 Formato SSE puro (R2-AC01)
