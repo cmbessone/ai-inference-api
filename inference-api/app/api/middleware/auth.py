@@ -17,8 +17,8 @@ from fastapi import Depends, Security
 from fastapi.security import APIKeyHeader
 
 from app.api.dependencies import ContainerDep
-from app.api.middleware.request_context import current_context
 from app.core.errors import UnauthorizedError
+from app.core.observability.context import current_context
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 

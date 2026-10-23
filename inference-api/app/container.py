@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from redis.asyncio import Redis
 
 from app.config import Settings
+from app.core.audit import QueuedAuditSink, RedisStreamAuditWriter
 from app.core.auth import KeyStore, StaticKeyStore, parse_api_keys
 from app.core.cache import RedisCache, RedisLock
 from app.core.circuit_breaker import (
@@ -36,6 +37,7 @@ from app.core.rate_limiter import (
 )
 from app.core.redis_gateway import RedisGateway
 from app.services.inference import CoalescingPolicy, InferenceService
+from app.services.streaming import StreamingPolicy, StreamingService
 
 
 @dataclass
@@ -56,6 +58,8 @@ class Container:
     rate_limiter: RateLimiter
     llm: ResilientLLMClient
     inference: InferenceService
+    streaming: StreamingService
+    audit: QueuedAuditSink
     lifecycle: Lifecycle = field(default_factory=Lifecycle)
 
     @classmethod
@@ -139,6 +143,21 @@ class Container:
                 max_wait_s=settings.single_flight_wait_s,
             ),
         )
+        audit = QueuedAuditSink(
+            RedisStreamAuditWriter(redis, maxlen=settings.audit_stream_maxlen),
+            metrics,
+            queue_size=settings.audit_queue_size,
+        )
+        streaming = StreamingService(
+            llm,
+            audit,
+            clock,
+            metrics,
+            StreamingPolicy(
+                buffer_size=settings.stream_buffer_size,
+                slow_consumer_timeout_s=settings.stream_slow_consumer_timeout_s,
+            ),
+        )
         return cls(
             settings=settings,
             clock=clock,
@@ -148,13 +167,17 @@ class Container:
             rate_limiter=rate_limiter,
             llm=llm,
             inference=inference,
+            streaming=streaming,
+            audit=audit,
         )
 
     async def start(self) -> None:
+        self.audit.start()
         self.lifecycle.ready = True
 
     async def aclose(self) -> None:
         self.lifecycle.shutting_down = True
         self.lifecycle.ready = False
+        await self.audit.aclose()
         await self.llm.aclose()
         await self.redis.aclose()

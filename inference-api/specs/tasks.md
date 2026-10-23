@@ -21,11 +21,11 @@ Cada tarea referencia los criterios de aceptación que cubre. `[x]` = implementa
 - [x] T14 `InferenceService` + ruta `/v1/infer` (R1-AC13, R1-AC14)
 
 ## PR #3 — R2 streaming
-- [ ] T15 Formato SSE puro (R2-AC01)
-- [ ] T16 Relay productor/consumidor con buffer acotado (R2-AC07, R2-AC08)
-- [ ] T17 Cancelación upstream por desconexión y timeout (R2-AC03, R2-AC04)
-- [ ] T18 `AuditSink` con cola acotada + worker (R2-AC05)
-- [ ] T19 Ruta `/v1/infer/stream` (R2-AC02, R2-AC06)
+- [x] T15 Formato SSE puro (R2-AC01)
+- [x] T16 Relay productor/consumidor con buffer acotado (R2-AC07, R2-AC08)
+- [x] T17 Cancelación upstream por desconexión y timeout (R2-AC03, R2-AC04)
+- [x] T18 `AuditSink` con cola acotada + worker (R2-AC05)
+- [x] T19 Ruta `/v1/infer/stream` (R2-AC02, R2-AC06)
 
 ## PR #4 — R3 clasificación
 - [ ] T20 Script de entrenamiento v1/v2 + manifest con SHA-256 (R3-AC08)

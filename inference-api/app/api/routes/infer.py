@@ -5,10 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.dependencies import ContainerDep
-from app.api.middleware.request_context import current_context
 from app.api.schemas import ErrorResponse, InferRequest, InferResponse, UsageOut
 from app.container import Container
 from app.core.errors import UnknownModelError
+from app.core.observability.context import current_context
 
 router = APIRouter(tags=["inference"])
 

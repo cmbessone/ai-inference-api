@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from app.api.errors import register_error_handlers
 from app.api.middleware.rate_limit import enforce_rate_limit
 from app.api.middleware.request_context import RequestContextMiddleware
-from app.api.routes import health, infer
+from app.api.routes import health, infer, stream
 from app.config import Settings, get_settings
 from app.container import Container
 from app.core.observability.logging import configure_logging, get_logger
@@ -36,6 +36,7 @@ def build_v1_router() -> APIRouter:
     """Todo `/v1/*` exige API key + rate limit (la auth es dependencia del rate limit)."""
     router = APIRouter(prefix="/v1", dependencies=[Depends(enforce_rate_limit)])
     router.include_router(infer.router)
+    router.include_router(stream.router)
     return router
 
 
