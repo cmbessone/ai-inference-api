@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 import fakeredis
 import httpx
@@ -16,15 +17,26 @@ from app.core.observability.metrics import Metrics
 from app.core.ports import LLMProvider
 from app.core.redis_gateway import RedisGateway
 from app.main import create_app
+from ml.train import train_all
 from tests.fakes import ScriptedProvider
 
 API_KEY = "demo-key-123"
 AUTH = {"X-API-Key": API_KEY}
 
 
+@pytest.fixture(scope="session")
+def models_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Entrena v1/v2 una vez por sesión (< 1 s) en un directorio temporal."""
+    out = tmp_path_factory.mktemp("models")
+    train_all(out)
+    return out
+
+
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(log_level="WARNING", llm_retry_base_delay_s=0.001)
+def settings(models_dir: Path) -> Settings:
+    return Settings(
+        log_level="WARNING", llm_retry_base_delay_s=0.001, ml_models_dir=str(models_dir)
+    )
 
 
 @pytest.fixture

@@ -7,6 +7,7 @@ Redis, el proveedor LLM o el runtime de ML sin tocar la lógica, y testear con d
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -25,6 +26,7 @@ from app.core.circuit_breaker import (
 )
 from app.core.clock import Clock, SystemClock
 from app.core.llm_client import ResilientLLMClient, RetryPolicy
+from app.core.ml_model import BatchPolicy, ModelRegistry, load_registry
 from app.core.observability.metrics import Metrics
 from app.core.ports import LLMProvider
 from app.core.providers import build_provider
@@ -36,6 +38,7 @@ from app.core.rate_limiter import (
     RedisRateLimiter,
 )
 from app.core.redis_gateway import RedisGateway
+from app.services.classification import ClassificationService
 from app.services.inference import CoalescingPolicy, InferenceService
 from app.services.streaming import StreamingPolicy, StreamingService
 
@@ -60,6 +63,7 @@ class Container:
     inference: InferenceService
     streaming: StreamingService
     audit: QueuedAuditSink
+    classification: ClassificationService
     lifecycle: Lifecycle = field(default_factory=Lifecycle)
 
     @classmethod
@@ -71,6 +75,7 @@ class Container:
         clock: Clock | None = None,
         redis_client: Redis | None = None,
         provider: LLMProvider | None = None,
+        registry: ModelRegistry | None = None,
     ) -> Container:
         clock = clock or SystemClock()
         metrics = metrics or Metrics()
@@ -158,6 +163,23 @@ class Container:
                 slow_consumer_timeout_s=settings.stream_slow_consumer_timeout_s,
             ),
         )
+        # R3-AC01/02: los modelos se cargan una sola vez, acá (dentro del lifespan) y fuera del
+        # event loop. Si faltan o no pasan el checksum, la réplica no arranca (fail fast).
+        if registry is None:
+            registry = await asyncio.to_thread(load_registry, settings.ml_models_dir)
+        classification = ClassificationService(
+            registry,
+            clock,
+            metrics,
+            default_version=settings.ml_default_version,
+            max_threads=settings.ml_max_threads,
+            batching=BatchPolicy(
+                window_s=settings.ml_batch_window_ms / 1000,
+                max_batch_size=settings.ml_max_batch_size,
+            )
+            if settings.ml_batching_enabled
+            else None,
+        )
         return cls(
             settings=settings,
             clock=clock,
@@ -169,15 +191,18 @@ class Container:
             inference=inference,
             streaming=streaming,
             audit=audit,
+            classification=classification,
         )
 
     async def start(self) -> None:
         self.audit.start()
+        self.classification.start()
         self.lifecycle.ready = True
 
     async def aclose(self) -> None:
         self.lifecycle.shutting_down = True
         self.lifecycle.ready = False
+        await self.classification.aclose()
         await self.audit.aclose()
         await self.llm.aclose()
         await self.redis.aclose()

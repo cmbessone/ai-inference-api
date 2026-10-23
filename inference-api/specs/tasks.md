@@ -28,11 +28,11 @@ Cada tarea referencia los criterios de aceptación que cubre. `[x]` = implementa
 - [x] T19 Ruta `/v1/infer/stream` (R2-AC02, R2-AC06)
 
 ## PR #4 — R3 clasificación
-- [ ] T20 Script de entrenamiento v1/v2 + manifest con SHA-256 (R3-AC08)
-- [ ] T21 `ModelRegistry` cargado en lifespan fuera del loop (R3-AC01, R3-AC02)
-- [ ] T22 Resolución de versión pura + 400 (R3-AC03..05)
-- [ ] T23 Inferencia en thread pool acotado (R3-AC06, R3-AC07)
-- [ ] T24 `MicroBatcher` (R3-AC09)
+- [x] T20 Script de entrenamiento v1/v2 + manifest con SHA-256 (R3-AC08)
+- [x] T21 `ModelRegistry` cargado en lifespan fuera del loop (R3-AC01, R3-AC02)
+- [x] T22 Resolución de versión pura + 400 (R3-AC03..05)
+- [x] T23 Inferencia en thread pool acotado (R3-AC06, R3-AC07)
+- [x] T24 `MicroBatcher` (R3-AC09)
 
 ## PR #5 — Operación
 - [ ] T25 Load shedding ASGI (RS-AC10)
