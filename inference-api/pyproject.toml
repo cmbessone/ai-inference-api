@@ -1,0 +1,87 @@
+[project]
+name = "inference-api"
+version = "1.0.0"
+description = "AI Inference API — escalable, resiliente y observable (FastAPI + Redis)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "httpx>=0.28",
+    "redis>=5.2",
+    "structlog>=24.4",
+    "prometheus-client>=0.21",
+    "scikit-learn>=1.5",
+    "joblib>=1.4",
+    "numpy>=2.0",
+    "anyio>=4.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "fakeredis[lua]>=2.26",
+    "asgi-lifespan>=2.1",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+load = ["locust>=2.32"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "ARG", "PTH",
+    "PL", "RUF", "ASYNC", "S", "T20", "PT", "TRY", "PERF", "FURB",
+]
+ignore = [
+    "PLR0913",  # constructores de composition root reciben muchas dependencias a propósito
+    "TRY003",   # mensajes de error descriptivos inline
+    "PLR2004",  # números mágicos en tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR2004", "ARG001", "ARG002", "S311"]
+"loadtest/**" = ["S311"]
+"ml/**" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "ml", "tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Security"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "ml"]
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "joblib.*", "fakeredis.*", "locust.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = ["integration: requiere el stack de docker compose levantado"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
