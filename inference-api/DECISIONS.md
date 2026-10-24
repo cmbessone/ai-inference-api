@@ -334,6 +334,31 @@ proveedor ──▶ productora ──▶ Queue(maxsize=64) ──▶ generador �
   `LLM_PROVIDER=openai` activa el adaptador real (httpx con pool keep-alive y cancelación al
   cerrar el stream).
 
+### ADR-018 — Seguridad de la API key
+- **Contexto:** con API keys, el cliente envía la key en cada request; es la forma de
+  identificarse. Que Swagger o Postman la muestren en el `curl` no es una fuga: reconstruyen,
+  en el navegador del propio cliente, el request que él mismo hizo. El servidor nunca la devuelve.
+- **Decisión:** la key la tiene el cliente por definición; el diseño garantiza que **el servidor
+  no la filtre**:
+
+  | Riesgo | Mitigación |
+  |---|---|
+  | Viaja en texto plano | HTTPS (TLS termina en el balanceador) |
+  | El servidor la almacena | Sólo `sha256(key) → client_id`; el lookup es por hash (sin comparación carácter a carácter) |
+  | Aparece en logs | Nunca se loguea y un procesador enmascara claves sensibles (test OB-AC03) |
+  | Vuelve en una respuesta | Ningún endpoint ni header la devuelve |
+  | Se adivina | Keys de 48 caracteres aleatorios; una key inválida no consume cuota de nadie |
+  | Se filtra | Rate limit por cliente, una key por cliente, revocación cambiando `API_KEYS` |
+  | Keys de demo en producción | Con `ENVIRONMENT=production` la réplica no arranca con ellas |
+- **Por qué API key y no otra cosa:** el enunciado pide `X-API-Key`, y para clientes
+  servidor-a-servidor es simple y suficiente.
+- **Camino a producción** (que el secreto no viaje en cada request):
+  - *Tokens de corta duración* (OAuth2 client credentials / JWT): la key sólo se usa para pedir
+    un token que vence en minutos.
+  - *Firma HMAC del request* (como AWS SigV4): viaja una firma del contenido con timestamp,
+    nunca la key; un request capturado no sirve para repetirlo.
+  - *mTLS*: la identidad es un certificado de cliente.
+
 ### ADR-017 — Deploy en Railway (y no en Vercel)
 - **Decisión:** Railway, con la misma imagen Docker: 3 réplicas, healthcheck `/health/ready`,
   solapamiento + drenaje para deploys sin downtime y apagado ordenado, y deploy automático en
@@ -440,4 +465,4 @@ estará bajo 200 ms: el SLA sync aplica de forma realista a cache hits y a `/cla
 | Multi-proveedor | Un proveedor | Fallback entre proveedores (OpenAI → Anthropic) detrás del mismo puerto, con breaker por proveedor |
 | ML | sklearn en proceso | ONNX Runtime, model registry (MLflow), canary entre versiones por header o porcentaje |
 | Auditoría | Redis Streams con MAXLEN | Kafka + consumidor a data lake si es requisito regulatorio |
-| Seguridad | `/metrics` expuesto por nginx | Restringir `/metrics` a la red interna; mTLS entre servicios |
+| Seguridad | API key por header sobre TLS, hasheada en el servidor; `/metrics` con token opcional | Tokens de corta duración o firma HMAC (ADR-018), keys en secret manager con rotación, `/metrics` sólo en red interna, mTLS entre servicios |
