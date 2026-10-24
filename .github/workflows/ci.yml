@@ -3,7 +3,7 @@
 #   quality  → ruff (lint + formato) + mypy --strict
 #   tests    → pytest con cobertura + trazabilidad SDD (criterio → test)
 #   stack    → build de la imagen, `docker compose up` con 3 réplicas y pruebas de
-#              integración contra el stack real (smoke de endpoints + caos)
+#              smoke test de los endpoints y caos (matar una réplica bajo tráfico)
 #
 # Los pasos que dependen de archivos que aparecen en PRs posteriores del stack
 # (Dockerfile, scripts/trace.py) se saltean si el archivo todavía no existe.
@@ -93,12 +93,6 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Este PR todavía no incluye Dockerfile/compose; se saltea."
           fi
-      - uses: astral-sh/setup-uv@v6
-        if: steps.has_stack.outputs.present == 'true'
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-          cache-dependency-glob: inference-api/uv.lock
       - name: Levantar nginx + 3 réplicas + redis
         if: steps.has_stack.outputs.present == 'true'
         run: docker compose up --build -d --wait --wait-timeout 180
@@ -113,9 +107,14 @@ jobs:
           curl -fsS "$B/v1/classify" -H "$H" -H "$J" -H 'X-Model-Version: v1' -d '{"input":"excelente"}' | grep -q '"model_version":"v1"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/v1/infer" -d '{}')" = "401"
           curl -fsS "$B/metrics" | grep -q http_requests_total
+      # Se llama al script directo (no vía pytest): existe desde el PR que agrega el stack,
+      # mientras que tests/integration/ llega después y pytest saldría con "no tests" (exit 5).
       - name: "Integración: matar una réplica bajo tráfico (caos)"
         if: steps.has_stack.outputs.present == 'true'
-        run: uv sync && uv run pytest -m integration -k replica_crash
+        run: |
+          set -o pipefail
+          ./scripts/chaos.sh | tee chaos.log
+          grep -q "fallidos: 0" chaos.log
       - name: Logs del stack si algo falló
         if: failure() && steps.has_stack.outputs.present == 'true'
         run: docker compose logs --no-color --tail 200
