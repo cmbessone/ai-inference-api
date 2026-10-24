@@ -36,7 +36,8 @@ def configure_logging(level: str = "INFO") -> None:
         processors=[*shared, structlog.processors.JSONRenderer()],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelNamesMapping()[level]),
         logger_factory=structlog.WriteLoggerFactory(file=sys.stdout),
-        cache_logger_on_first_use=True,
+        # Sin cache: permite reconfigurar (nivel en runtime, captura en tests) a costo de µs.
+        cache_logger_on_first_use=False,
     )
     # Uvicorn ya tiene su access log; lo silenciamos porque emitimos el nuestro en JSON.
     logging.getLogger("uvicorn.access").disabled = True

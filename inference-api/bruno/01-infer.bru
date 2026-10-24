@@ -1,0 +1,30 @@
+meta {
+  name: Infer (sync)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/v1/infer
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+}
+
+body:json {
+  {
+    "model": "gpt-4o",
+    "input": "Explicá qué es un circuit breaker",
+    "config": { "temperature": 0.7 }
+  }
+}
+
+tests {
+  test("200 con contrato completo", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body).to.have.keys("request_id", "output", "model", "usage", "latency_ms", "cache_hit");
+  });
+}

@@ -1,0 +1,18 @@
+meta {
+  name: Sin API key (401)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/v1/infer
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "model": "gpt-4o",
+    "input": "hola"
+  }
+}

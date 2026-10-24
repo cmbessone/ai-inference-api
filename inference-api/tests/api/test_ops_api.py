@@ -12,7 +12,7 @@ from app.api.routes.health import overall_status
 from app.config import Settings
 from app.core.circuit_breaker import CircuitState
 from tests.conftest import AUTH, AppFactory, serve
-from tests.fakes import ScriptedProvider, unreachable_redis
+from tests.fakes import ScriptedProvider, provider_down, unreachable_redis
 
 BODY = {"model": "gpt-4o", "input": "Hola"}
 
@@ -115,3 +115,17 @@ async def test_readiness_fails_during_shutdown(make_app: AppFactory) -> None:
         response = await http.get("/health/ready")
     assert response.status_code == 503
     assert response.json() == {"status": "shutting_down"}
+
+
+async def test_breaker_policy_is_configurable(make_app: AppFactory, settings: Settings) -> None:
+    """RS-AC08: umbral/ventana/duración salen de la configuración."""
+    custom = settings.model_copy(
+        update={"cb_failure_threshold": 2, "cb_open_s": 15, "llm_max_retries": 0}
+    )
+    provider = ScriptedProvider(error=provider_down())
+    async with serve(make_app(settings_override=custom, llm=provider)) as http:
+        for i in range(2):
+            await http.post("/v1/infer", json={**BODY, "input": f"x{i}"}, headers=AUTH)
+        response = await http.post("/v1/infer", json=BODY, headers=AUTH)
+    assert response.status_code == 503
+    assert response.json()["retry_after_s"] == 15

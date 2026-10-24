@@ -55,6 +55,7 @@ ignore = [
 "tests/**" = ["S101", "S105", "S106", "PLR2004", "ARG001", "ARG002", "S311"]
 "loadtest/**" = ["S311"]
 "ml/**" = ["T201"]
+"scripts/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "ml", "tests"]
@@ -76,7 +77,7 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers -m 'not integration'"
 markers = ["integration: requiere el stack de docker compose levantado"]
 
 [tool.coverage.run]
