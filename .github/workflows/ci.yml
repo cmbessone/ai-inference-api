@@ -101,12 +101,15 @@ jobs:
         run: |
           set -euo pipefail
           B=http://localhost:8080; H='X-API-Key: demo-key-123'; J='Content-Type: application/json'
-          curl -fsS "$B/health" | tee /dev/stderr | grep -q '"status":"ok"'
-          curl -fsS "$B/v1/infer" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}' | grep -q '"request_id"'
-          curl -fsSN "$B/v1/infer/stream" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}' | grep -q 'data: \[DONE\]'
-          curl -fsS "$B/v1/classify" -H "$H" -H "$J" -H 'X-Model-Version: v1' -d '{"input":"excelente"}' | grep -q '"model_version":"v1"'
+          # La respuesta se guarda antes de buscar: con `curl | grep -q`, grep cierra el pipe al
+          # primer match y curl muere con exit 23 (falla intermitente según el tamaño del body).
+          expect() { local body; body="$(curl -fsSN "${@:2}")"; grep -q -- "$1" <<<"$body" || { echo "falta '$1' en: $body"; exit 1; }; }
+          expect '"status":"ok"'          "$B/health"
+          expect '"request_id"'           "$B/v1/infer" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}'
+          expect 'data: \[DONE\]'         "$B/v1/infer/stream" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}'
+          expect '"model_version":"v1"'   "$B/v1/classify" -H "$H" -H "$J" -H 'X-Model-Version: v1' -d '{"input":"excelente"}'
+          expect 'http_requests_total'    "$B/metrics"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/v1/infer" -d '{}')" = "401"
-          curl -fsS "$B/metrics" | grep -q http_requests_total
       # Se llama al script directo (no vía pytest): existe desde el PR que agrega el stack,
       # mientras que tests/integration/ llega después y pytest saldría con "no tests" (exit 5).
       - name: "Integración: matar una réplica bajo tráfico (caos)"
