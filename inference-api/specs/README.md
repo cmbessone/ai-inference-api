@@ -69,6 +69,6 @@
 | OB-AC04 | `test_ops_api::test_overall_status`<br>`test_ops_api::test_health_report` |
 | OB-AC05 | `test_ops_api::test_readiness_and_liveness`<br>`test_request_context::test_liveness` |
 | OB-AC06 | `test_ops_api::test_readiness_and_liveness`<br>`test_ops_api::test_readiness_fails_during_shutdown` |
-| OB-AC07 | `test_ops_api::test_metrics_exposes_required_series`<br>`test_request_context::test_metric_route_label_bounds_cardinality` |
+| OB-AC07 | `test_ops_api::test_metrics_exposes_required_series`<br>`test_ops_api::test_metrics_can_require_a_token`<br>`test_request_context::test_metric_route_label_bounds_cardinality` |
 | OB-AC08 | `test_stack::test_sustains_100_rps_under_sla` |
 <!-- trace:end -->

@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 LLMProviderName = Literal["mock", "openai"]
@@ -20,6 +20,9 @@ def _split_csv(value: object) -> object:
     if isinstance(value, str):
         return [item.strip() for item in value.split(",") if item.strip()]
     return value
+
+
+DEMO_API_KEYS = "demo-client:demo-key-123,acme:acme-key-456"
 
 
 class Settings(BaseSettings):
@@ -34,7 +37,9 @@ class Settings(BaseSettings):
 
     # ── Autenticación ───────────────────────────────────────────────────────────
     # Formato: "client_id:api_key,client_id2:api_key2". En producción vendría de un secret manager.
-    api_keys: SecretStr = SecretStr("demo-client:demo-key-123,acme:acme-key-456")
+    api_keys: SecretStr = SecretStr(DEMO_API_KEYS)
+    # Si se define, `/metrics` exige `Authorization: Bearer <token>` (deploys públicos).
+    metrics_token: SecretStr | None = None
 
     # ── Redis ───────────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
@@ -91,6 +96,13 @@ class Settings(BaseSettings):
     ml_batching_enabled: bool = True
     ml_batch_window_ms: float = Field(default=10.0, gt=0)
     ml_max_batch_size: int = Field(default=64, ge=1)
+
+    @model_validator(mode="after")
+    def _no_demo_keys_in_production(self) -> Settings:
+        """Las keys de demo están en el repo: en producción la réplica no arranca con ellas."""
+        if self.environment == "production" and self.api_keys.get_secret_value() == DEMO_API_KEYS:
+            raise ValueError("ENVIRONMENT=production requiere API_KEYS propias (no las de demo)")
+        return self
 
     @field_validator("llm_allowed_models", mode="before")
     @classmethod

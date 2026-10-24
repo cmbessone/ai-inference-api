@@ -334,6 +334,18 @@ proveedor ──▶ productora ──▶ Queue(maxsize=64) ──▶ generador �
   `LLM_PROVIDER=openai` activa el adaptador real (httpx con pool keep-alive y cancelación al
   cerrar el stream).
 
+### ADR-017 — Deploy en Railway (y no en Vercel)
+- **Decisión:** Railway, con la misma imagen Docker y la configuración como código en
+  `railway.json` (3 réplicas, healthcheck `/health/ready`, `overlapSeconds` + `drainingSeconds`
+  para deploys sin downtime y apagado ordenado).
+- **Por qué no serverless (Vercel):** el diseño supone procesos de larga vida. Modelos cargados
+  una vez con warm-up, workers en background (auditoría, micro-batcher), single-flight y
+  batching por réplica, y streams SSE largos. En funciones efímeras todo eso se pierde o se
+  repite en cada arranque en frío.
+- **Ajustes para una URL pública:** el puerto sale de `$PORT`; con `ENVIRONMENT=production` la
+  réplica se niega a arrancar con las API keys de demo (son públicas en el repo); `/metrics`
+  admite un `METRICS_TOKEN` opcional.
+
 ### ADR-016 — CI por PR con GitHub Actions
 - **Decisión:** tres jobs en cada PR y en cada push a `main`:
   `quality` (ruff + mypy --strict), `tests` (pytest con cobertura + `make trace`) y `stack`
