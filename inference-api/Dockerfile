@@ -28,19 +28,22 @@ COPY app ./app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    ML_MODELS_DIR=/app/models
+    ML_MODELS_DIR=/app/models \
+    PORT=8000
 
 USER app
 EXPOSE 8000
 
+# PORT: las plataformas (Railway, Cloud Run, Heroku) inyectan el puerto; en local queda 8000.
 HEALTHCHECK --interval=5s --timeout=2s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health/ready', timeout=2)"
 
 # Un proceso por contenedor: se escala con réplicas (orquestador), no con workers internos.
 # --timeout-graceful-shutdown: ante SIGTERM termina requests/streams en curso (RS-AC13).
-# --timeout-keep-alive 75 > keepalive de nginx (60) para evitar carreras al reusar conexiones.
-CMD ["uvicorn", "app.main:create_app", "--factory", \
-     "--host", "0.0.0.0", "--port", "8000", \
-     "--loop", "uvloop", "--http", "httptools", \
-     "--timeout-graceful-shutdown", "30", "--timeout-keep-alive", "75", \
-     "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# --timeout-keep-alive 75 > keepalive del LB (60) para evitar carreras al reusar conexiones.
+# Forma shell + `exec`: expande $PORT y deja a uvicorn como PID 1 (recibe SIGTERM directo).
+CMD exec uvicorn app.main:create_app --factory \
+    --host 0.0.0.0 --port "${PORT}" \
+    --loop uvloop --http httptools \
+    --timeout-graceful-shutdown 30 --timeout-keep-alive 75 \
+    --no-access-log --proxy-headers --forwarded-allow-ips "*"

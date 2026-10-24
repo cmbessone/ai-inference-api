@@ -6,6 +6,7 @@ import asyncio
 
 import httpx
 import pytest
+from pydantic import SecretStr, ValidationError
 
 from app.api.middleware.load_shedding import is_exempt
 from app.api.routes.health import overall_status
@@ -129,3 +130,20 @@ async def test_breaker_policy_is_configurable(make_app: AppFactory, settings: Se
         response = await http.post("/v1/infer", json=BODY, headers=AUTH)
     assert response.status_code == 503
     assert response.json()["retry_after_s"] == 15
+
+
+async def test_metrics_can_require_a_token(make_app: AppFactory, settings: Settings) -> None:
+    """OB-AC07 en deploys públicos: con METRICS_TOKEN, /metrics exige Bearer."""
+    secured = settings.model_copy(update={"metrics_token": SecretStr("s3cr3t")})
+    async with serve(make_app(settings_override=secured)) as http:
+        anonymous = await http.get("/metrics")
+        wrong = await http.get("/metrics", headers={"Authorization": "Bearer nope"})
+        ok = await http.get("/metrics", headers={"Authorization": "Bearer s3cr3t"})
+    assert (anonymous.status_code, wrong.status_code, ok.status_code) == (401, 401, 200)
+
+
+def test_production_refuses_demo_api_keys() -> None:
+    """Las keys de demo son públicas (están en el repo): en producción no se arranca."""
+    with pytest.raises(ValidationError, match="API_KEYS propias"):
+        Settings(environment="production")
+    assert Settings(environment="production", api_keys=SecretStr("c:una-key-larga")).api_keys

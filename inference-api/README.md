@@ -110,6 +110,22 @@ uv run pytest -m integration       # pruebas contra el stack levantado
 tests + trazabilidad, y levanta el stack con `docker compose` para un smoke test de los
 endpoints y la prueba de caos. Ver DECISIONS.md → ADR-016.
 
+## Deploy (Railway)
+
+[`railway.json`](railway.json) define el servicio como código: build con el `Dockerfile`,
+**3 réplicas**, healthcheck sobre `/health/ready`, solapamiento y drenaje en cada deploy
+(sin downtime) y reinicio ante fallas. Railway balancea entre réplicas (cumple el rol de nginx)
+y aporta Redis en la red privada.
+
+| Variable | Valor |
+|---|---|
+| `ENVIRONMENT` | `production` (exige `API_KEYS` propias: la réplica no arranca con las de demo) |
+| `API_KEYS` | `cliente:key-larga-aleatoria` (secreto) |
+| `REDIS_URL` | `${{Redis.REDIS_URL}}` (referencia al servicio Redis) |
+| `METRICS_TOKEN` | opcional: protege `/metrics` con `Authorization: Bearer …` |
+
+El contenedor escucha en `$PORT` (lo inyecta la plataforma; 8000 por defecto).
+
 ## Simular fallas
 
 ```bash
