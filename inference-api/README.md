@@ -112,6 +112,11 @@ endpoints y la prueba de caos. Ver DECISIONS.md → ADR-016.
 
 ## Deploy (Railway)
 
+**En producción:** https://api-production-5ab0.up.railway.app · [`/docs`](https://api-production-5ab0.up.railway.app/docs)
+· [`/health`](https://api-production-5ab0.up.railway.app/health). Los endpoints `/v1/*`
+requieren una API key, que se comparte por un canal seguro (no está en el repo).
+
+
 Servicio `api` conectado al repo (rama `main`, *root directory* `inference-api`): cada merge a
 `main` se despliega solo. Build con el `Dockerfile`, **3 réplicas**, healthcheck sobre
 `/health/ready`, solapamiento (20 s) y drenaje (35 s) en cada deploy (sin downtime) y reinicio
