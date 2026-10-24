@@ -8,44 +8,27 @@ from __future__ import annotations
 
 import re
 import uuid
-from contextvars import ContextVar
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.clock import Clock, SystemClock
+from app.core.observability.context import (
+    Outcome,
+    RequestContext,
+    bind_context,
+    current_context,
+    reset_context,
+)
 from app.core.observability.logging import get_logger
 
-Outcome = Literal["success", "error", "timeout"]
+__all__ = ["RequestContext", "RequestContextMiddleware", "current_context"]
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 _SILENT_PATHS = frozenset({"/health/live", "/health/ready", "/metrics"})
 
 logger = get_logger("access")
-
-
-@dataclass(slots=True)
-class RequestContext:
-    """Acumulador mutable del request (cáscara imperativa).
-
-    Las rutas completan los campos que sólo ellas conocen (modelo, cache hit, motivo de fin);
-    el middleware los lee al final para emitir una única línea de log de acceso (OB-AC01).
-    """
-
-    request_id: str
-    client_id: str | None = None
-    model: str | None = None
-    cache_hit: bool | None = None
-    outcome: Outcome | None = None
-
-
-_current: ContextVar[RequestContext | None] = ContextVar("request_context", default=None)
-
-
-def current_context() -> RequestContext | None:
-    return _current.get()
 
 
 # ── Funciones puras ─────────────────────────────────────────────────────────────
@@ -65,6 +48,19 @@ def classify_outcome(status_code: int, override: Outcome | None) -> Outcome:
     if status_code == 504:
         return "timeout"
     return "success" if status_code < 400 else "error"
+
+
+def metric_route_label(path: str, route: object | None) -> str:
+    """Label de ruta con cardinalidad acotada (pura).
+
+    Sin match (404, escaneos) → "unmatched"; nunca el path crudo, que es input del atacante.
+    Rutas con parámetros → la plantilla. Rutas estáticas → el path completo (en FastAPI ≥ 0.16x
+    `route.path` es relativo al router que la incluye y perdería el prefijo `/v1`).
+    """
+    if route is None:
+        return "unmatched"
+    template: str = getattr(route, "path", path)
+    return template if "{" in template else path
 
 
 def header_value(scope: Scope, name: bytes) -> str | None:
@@ -100,7 +96,7 @@ class RequestContextMiddleware:
             return
 
         ctx = RequestContext(request_id=resolve_request_id(header_value(scope, b"x-request-id")))
-        token = _current.set(ctx)
+        token = bind_context(ctx)
         structlog.contextvars.bind_contextvars(request_id=ctx.request_id)
         started = self._clock.monotonic()
         status_code = 500
@@ -129,12 +125,11 @@ class RequestContextMiddleware:
         finally:
             finish()  # cubre excepciones y desconexiones a mitad de stream
             structlog.contextvars.unbind_contextvars("request_id")
-            _current.reset(token)
+            reset_context(token)
 
     def _record(self, scope: Scope, ctx: RequestContext, status_code: int, elapsed: float) -> None:
         path: str = scope.get("path", "")
-        route = scope.get("route")
-        route_path: str = getattr(route, "path", path)
+        route_path = metric_route_label(path, scope.get("route"))
         if self._observer is not None:
             self._observer.observe(scope.get("method", ""), route_path, status_code, elapsed)
         if path in _SILENT_PATHS:
