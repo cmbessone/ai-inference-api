@@ -8,7 +8,8 @@ KEY="${KEY:-demo-key-123}"
 TOTAL="${TOTAL:-40}"
 COMPOSE="$(docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)"
 
-victim="$($COMPOSE ps -q api | head -n1)"
+# awk lee toda la salida: con `head -n1` + pipefail, docker puede morir por SIGPIPE.
+victim="$($COMPOSE ps -q api | awk 'NR == 1')"
 ok=0; fail=0
 for i in $(seq 1 "$TOTAL"); do
   if [[ "$i" -eq $((TOTAL / 4)) ]]; then

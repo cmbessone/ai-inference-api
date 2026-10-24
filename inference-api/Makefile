@@ -54,8 +54,8 @@ load: ## Prueba de carga headless: ~100 RPS durante 60 s contra el stack (`make 
 		--csv loadtest/results --html loadtest/report.html
 
 load-internal: ## Carga desde dentro de la red de Docker (sin el port-forward del host)
-	docker cp loadtest/in_network.py $$($(COMPOSE) ps -q api | head -n1):/tmp/in_network.py
-	docker exec $$($(COMPOSE) ps -q api | head -n1) python /tmp/in_network.py http://nginx
+	docker cp loadtest/in_network.py $$($(COMPOSE) ps -q api | awk 'NR == 1'):/tmp/in_network.py
+	docker exec $$($(COMPOSE) ps -q api | awk 'NR == 1') python /tmp/in_network.py http://nginx
 
 chaos: ## Demo HA: mata una réplica y muestra que el servicio sigue respondiendo
 	./scripts/chaos.sh
