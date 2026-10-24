@@ -1,0 +1,124 @@
+# CI: valida cada PR (incluidos los PRs apilados, cuya base no es `main`) y cada push a main.
+#
+#   quality  → ruff (lint + formato) + mypy --strict
+#   tests    → pytest con cobertura + trazabilidad SDD (criterio → test)
+#   stack    → build de la imagen, `docker compose up` con 3 réplicas y pruebas de
+#              integración contra el stack real (smoke de endpoints + caos)
+#
+# Los pasos que dependen de archivos que aparecen en PRs posteriores del stack
+# (Dockerfile, scripts/trace.py) se saltean si el archivo todavía no existe.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: inference-api
+
+env:
+  UV_FROZEN: "1"
+  UV_VERSION: "0.12.10"
+
+jobs:
+  quality:
+    name: Lint + tipos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: inference-api/uv.lock
+      - name: Instalar dependencias
+        run: uv sync
+      - name: Ruff (lint)
+        run: uv run ruff check --output-format=github .
+      - name: Ruff (formato)
+        run: uv run ruff format --check .
+      - name: mypy --strict
+        run: uv run mypy
+
+  tests:
+    name: Tests + trazabilidad
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: inference-api/uv.lock
+      - name: Instalar dependencias
+        run: uv sync
+      - name: pytest (unit + API + e2e con uvicorn)
+        run: uv run pytest --cov --cov-report=term-missing:skip-covered --cov-report=xml
+      - name: Trazabilidad SDD (falla si un criterio no tiene test)
+        if: hashFiles('inference-api/scripts/trace.py') != ''
+        run: uv run python scripts/trace.py
+      - name: Reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: inference-api/coverage.xml
+          if-no-files-found: ignore
+
+  stack:
+    name: Docker compose + integración
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [quality, tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: ¿Hay stack para levantar?
+        id: has_stack
+        run: |
+          if [ -f Dockerfile ] && [ -f docker-compose.yml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Este PR todavía no incluye Dockerfile/compose; se saltea."
+          fi
+      - uses: astral-sh/setup-uv@v6
+        if: steps.has_stack.outputs.present == 'true'
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: inference-api/uv.lock
+      - name: Levantar nginx + 3 réplicas + redis
+        if: steps.has_stack.outputs.present == 'true'
+        run: docker compose up --build -d --wait --wait-timeout 180
+      - name: Smoke test de los endpoints
+        if: steps.has_stack.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          B=http://localhost:8080; H='X-API-Key: demo-key-123'; J='Content-Type: application/json'
+          curl -fsS "$B/health" | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsS "$B/v1/infer" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}' | grep -q '"request_id"'
+          curl -fsSN "$B/v1/infer/stream" -H "$H" -H "$J" -d '{"model":"gpt-4o","input":"hola"}' | grep -q 'data: \[DONE\]'
+          curl -fsS "$B/v1/classify" -H "$H" -H "$J" -H 'X-Model-Version: v1' -d '{"input":"excelente"}' | grep -q '"model_version":"v1"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/v1/infer" -d '{}')" = "401"
+          curl -fsS "$B/metrics" | grep -q http_requests_total
+      - name: "Integración: matar una réplica bajo tráfico (caos)"
+        if: steps.has_stack.outputs.present == 'true'
+        run: uv sync && uv run pytest -m integration -k replica_crash
+      - name: Logs del stack si algo falló
+        if: failure() && steps.has_stack.outputs.present == 'true'
+        run: docker compose logs --no-color --tail 200
+      - name: Bajar el stack
+        if: always() && steps.has_stack.outputs.present == 'true'
+        run: docker compose down -v
