@@ -1,5 +1,7 @@
 # AI Inference API
 
+[![CI](https://github.com/cmbessone/ai-inference-api/actions/workflows/ci.yml/badge.svg)](https://github.com/cmbessone/ai-inference-api/actions/workflows/ci.yml)
+
 API de inferencia **escalable y de alta disponibilidad** para una plataforma SaaS: LLM
 sincrónico con cache, streaming SSE resiliente y clasificación con un modelo propio versionado.
 
@@ -103,6 +105,10 @@ make up-load && make load          # locust a ~100 RPS desde el host
 make load-internal                 # carga desde la red de Docker
 uv run pytest -m integration       # pruebas contra el stack levantado
 ```
+
+**CI** ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)): cada PR corre lint + tipos,
+tests + trazabilidad, y levanta el stack con `docker compose` para un smoke test de los
+endpoints y la prueba de caos. Ver DECISIONS.md → ADR-016.
 
 ## Simular fallas
 

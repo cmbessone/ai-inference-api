@@ -30,6 +30,7 @@
 | Bonus: Prometheus `/metrics`, locust 100 RPS, batching dinámico | ✅ los tres | `loadtest/RESULTS.md` |
 | Tests | 110 tests (unit + API + e2e con uvicorn real) en ~2 s + 2 de integración contra el stack | `make test` · `pytest -m integration` |
 | Trazabilidad SDD | 56/56 criterios de aceptación con test | `make trace` |
+| CI | Cada PR: lint + tipos, tests + trazabilidad, `docker compose` + smoke + caos | `.github/workflows/ci.yml` |
 | Calidad | `ruff` (22 familias de reglas) + `mypy --strict` sin errores | `make lint` |
 
 **Idea central:** réplicas *stateless* detrás de un balanceador, con todo el estado compartido
@@ -333,6 +334,20 @@ proveedor ──▶ productora ──▶ Queue(maxsize=64) ──▶ generador �
   `LLM_PROVIDER=openai` activa el adaptador real (httpx con pool keep-alive y cancelación al
   cerrar el stream).
 
+### ADR-016 — CI por PR con GitHub Actions
+- **Decisión:** tres jobs en cada PR y en cada push a `main`:
+  `quality` (ruff + mypy --strict), `tests` (pytest con cobertura + `make trace`) y `stack`
+  (`docker compose up --wait` con 3 réplicas, smoke test de los endpoints y `scripts/chaos.sh`).
+- **PRs apilados:** el workflow vive en la base del stack y corre en `pull_request` sin filtro
+  de rama, así valida también los PRs cuya base no es `main`. Los pasos que dependen de
+  archivos de PRs posteriores (`Dockerfile`, `scripts/trace.py`) se saltean si todavía no
+  existen: cada PR se valida con lo que trae.
+- **Fuera del CI, a propósito:** la carga de 100 RPS. En runners compartidos la latencia
+  depende de los vecinos, y un umbral de P95 ahí generaría falsos negativos. Queda manual
+  (`make load-internal`) y con resultados documentados.
+- **Evolución:** escaneo de dependencias e imagen (`pip-audit`, Trivy), publicar la imagen en
+  un registry por commit y un job de carga nocturno en un runner dedicado.
+
 ---
 
 ## 6. Patrones de diseño: dónde y por qué
@@ -370,6 +385,8 @@ Problemas reales encontrados al medir, con su corrección:
 | 5 | Primera predicción en frío ~600 ms | Pico de latencia tras cada deploy | Warm-up antes de *ready* |
 | 6 | Import circular `container → api.auth → api.dependencies → container` | — | `KeyStore` movido a `core/auth.py` (el dominio no depende de la API) |
 | 7 | El servicio de streaming importaba el contexto desde `api/` | Violación de capas | `RequestContext` movido a `core/observability/context.py` |
+| 8 | CI: `curl … \| grep -q` con `pipefail` | El smoke test fallaba de forma intermitente (exit 23): `grep` cierra el pipe al primer match y `curl` muere escribiendo | Guardar la respuesta y buscar después |
+| 9 | CI: `docker compose ps -q \| head -n1` con `pipefail` en `chaos.sh` | El caos fallaba a veces (exit 255): `head` cierra el pipe y `docker` recibe SIGPIPE | `awk 'NR == 1'`, que consume toda la salida |
 
 ---
 
