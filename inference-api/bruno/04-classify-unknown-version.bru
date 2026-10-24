@@ -1,0 +1,29 @@
+meta {
+  name: Classify versión inexistente (400)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/v1/classify
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  X-Model-Version: v9
+}
+
+body:json {
+  {
+    "input": "hola"
+  }
+}
+
+tests {
+  test("400 con mensaje claro", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.error).to.equal("unknown_model_version");
+  });
+}

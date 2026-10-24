@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV ?= uv
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 
-.PHONY: help install models lint format typecheck test cov up up-load down logs ps load load-internal chaos clean
+.PHONY: help install models lint format typecheck test cov up up-load down logs ps load load-internal chaos trace clean
 
 help: ## Lista los comandos disponibles
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -59,6 +59,9 @@ load-internal: ## Carga desde dentro de la red de Docker (sin el port-forward de
 
 chaos: ## Demo HA: mata una réplica y muestra que el servicio sigue respondiendo
 	./scripts/chaos.sh
+
+trace: ## Matriz de trazabilidad SDD (criterio → tests); falla si falta alguno
+	$(UV) run python scripts/trace.py
 
 clean: ## Borra artefactos locales
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov models

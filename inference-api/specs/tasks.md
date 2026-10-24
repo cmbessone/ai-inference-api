@@ -43,6 +43,6 @@ Cada tarea referencia los criterios de aceptación que cubre. `[x]` = implementa
 - [x] T30 Locust + resultados (OB-AC08)
 
 ## PR #6 — Documentación
-- [ ] T31 `DECISIONS.md` con ADRs y escenarios A/B/C
-- [ ] T32 Diagramas C4 (contexto, contenedores, componentes) + dinámicos
-- [ ] T33 README con ejemplos de los 3 endpoints + colección Bruno
+- [x] T31 `DECISIONS.md` con ADRs y escenarios A/B/C
+- [x] T32 Diagramas C4 (contexto, contenedores, componentes) + dinámicos
+- [x] T33 README con ejemplos de los 3 endpoints + colección Bruno

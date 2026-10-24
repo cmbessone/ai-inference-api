@@ -1,0 +1,28 @@
+meta {
+  name: Classify v2
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/v1/classify
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  X-Model-Version: v2
+}
+
+body:json {
+  {
+    "input": "excelente servicio, me encantó"
+  }
+}
+
+tests {
+  test("versión v2", function() {
+    expect(res.body.model_version).to.equal("v2");
+  });
+}
