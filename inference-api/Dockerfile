@@ -6,12 +6,14 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    UV_NO_CACHE=1
 
-# Capa cacheable: sólo se invalida si cambian las dependencias.
+# Capa cacheable: sólo se invalida si cambian las dependencias. Sin `RUN --mount=type=cache`
+# a propósito: algunos builders (Railway) exigen un id propio de la plataforma y el
+# Dockerfile debe ser portable; el cache de capas ya evita reinstalar.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Los artefactos del modelo se generan en el build: imagen inmutable y reproducible (R3-AC08).
 COPY ml ./ml

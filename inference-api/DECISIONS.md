@@ -335,13 +335,19 @@ proveedor ──▶ productora ──▶ Queue(maxsize=64) ──▶ generador �
   cerrar el stream).
 
 ### ADR-017 — Deploy en Railway (y no en Vercel)
-- **Decisión:** Railway, con la misma imagen Docker y la configuración como código en
-  `railway.json` (3 réplicas, healthcheck `/health/ready`, `overlapSeconds` + `drainingSeconds`
-  para deploys sin downtime y apagado ordenado).
+- **Decisión:** Railway, con la misma imagen Docker: 3 réplicas, healthcheck `/health/ready`,
+  solapamiento + drenaje para deploys sin downtime y apagado ordenado, y deploy automático en
+  cada merge a `main`.
+- **Configuración:** Railway deprecó `railway.json` (deja de leerse el 2026-12-01 y los servicios
+  nuevos no pueden usarlo) en favor de `.railway/railway.ts`, que requiere una CLI más nueva.
+  Mientras tanto la configuración se aplica por API y queda documentada en el README; migrar a
+  ese formato es el siguiente paso.
 - **Por qué no serverless (Vercel):** el diseño supone procesos de larga vida. Modelos cargados
   una vez con warm-up, workers en background (auditoría, micro-batcher), single-flight y
   batching por réplica, y streams SSE largos. En funciones efímeras todo eso se pierde o se
   repite en cada arranque en frío.
+- **Dockerfile portable:** sin `RUN --mount=type=cache`, porque el builder de Railway exige un
+  id de cache propio de la plataforma.
 - **Ajustes para una URL pública:** el puerto sale de `$PORT`; con `ENVIRONMENT=production` la
   réplica se niega a arrancar con las API keys de demo (son públicas en el repo); `/metrics`
   admite un `METRICS_TOKEN` opcional.

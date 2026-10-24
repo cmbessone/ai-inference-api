@@ -112,10 +112,11 @@ endpoints y la prueba de caos. Ver DECISIONS.md → ADR-016.
 
 ## Deploy (Railway)
 
-[`railway.json`](railway.json) define el servicio como código: build con el `Dockerfile`,
-**3 réplicas**, healthcheck sobre `/health/ready`, solapamiento y drenaje en cada deploy
-(sin downtime) y reinicio ante fallas. Railway balancea entre réplicas (cumple el rol de nginx)
-y aporta Redis en la red privada.
+Servicio `api` conectado al repo (rama `main`, *root directory* `inference-api`): cada merge a
+`main` se despliega solo. Build con el `Dockerfile`, **3 réplicas**, healthcheck sobre
+`/health/ready`, solapamiento (20 s) y drenaje (35 s) en cada deploy (sin downtime) y reinicio
+ante fallas. Railway balancea entre réplicas (cumple el rol de nginx) y aporta Redis en la red
+privada.
 
 | Variable | Valor |
 |---|---|
