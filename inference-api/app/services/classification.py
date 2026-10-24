@@ -72,6 +72,15 @@ class ClassificationService:
         latency_ms = round((self._clock.monotonic() - started) * 1000)
         return ClassificationResult(prediction, version, latency_ms)
 
+    async def warmup(self) -> None:
+        """Una inferencia por versión antes de declararse *ready*.
+
+        La primera predicción paga imports perezosos de sklearn/numpy y el arranque del thread
+        pool (~0.5 s medido): mejor pagarlo en el arranque que en el P95 de un cliente.
+        """
+        for version in self.versions:
+            await self._run_in_thread(self._registry.get(version).predict_batch, ["warmup"])
+
     def start(self) -> None:
         for batcher in self._batchers.values():
             batcher.start()

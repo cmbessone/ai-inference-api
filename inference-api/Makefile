@@ -1,10 +1,9 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 UV ?= uv
-COMPOSE ?= docker compose
-REPLICAS ?= 3
+COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 
-.PHONY: help install models lint format typecheck test cov up down logs ps load clean
+.PHONY: help install models lint format typecheck test cov up up-load down logs ps load load-internal chaos clean
 
 help: ## Lista los comandos disponibles
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -33,9 +32,12 @@ test: ## Tests unitarios + de API (sin docker)
 cov: ## Tests con reporte de cobertura
 	$(UV) run pytest -m "not integration" --cov --cov-report=term-missing
 
-up: ## Levanta nginx + N réplicas + redis
-	$(COMPOSE) up --build -d --scale api=$(REPLICAS)
+up: ## Levanta nginx + 3 réplicas + redis (espera a que estén sanas)
+	$(COMPOSE) up --build -d --wait
 	@echo "API en http://localhost:8080  ·  docs en http://localhost:8080/docs"
+
+up-load: ## Igual que `up` pero con rate limit alto para pruebas de carga
+	$(COMPOSE) -f docker-compose.yml -f deploy/compose.loadtest.yml up --build -d --wait
 
 down: ## Baja el stack
 	$(COMPOSE) down -v
@@ -46,10 +48,17 @@ logs: ## Sigue los logs de las réplicas
 ps: ## Estado de los contenedores
 	$(COMPOSE) ps
 
-load: ## Prueba de carga headless: 100 RPS durante 60 s contra el stack levantado
+load: ## Prueba de carga headless: ~100 RPS durante 60 s contra el stack (`make up-load`)
 	$(UV) run --group load locust -f loadtest/locustfile.py --headless \
-		-u 120 -r 40 -t 60s --host http://localhost:8080 \
+		-u 100 -r 50 -t 60s --host http://localhost:8080 \
 		--csv loadtest/results --html loadtest/report.html
+
+load-internal: ## Carga desde dentro de la red de Docker (sin el port-forward del host)
+	docker cp loadtest/in_network.py $$($(COMPOSE) ps -q api | head -n1):/tmp/in_network.py
+	docker exec $$($(COMPOSE) ps -q api | head -n1) python /tmp/in_network.py http://nginx
+
+chaos: ## Demo HA: mata una réplica y muestra que el servicio sigue respondiendo
+	./scripts/chaos.sh
 
 clean: ## Borra artefactos locales
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov models

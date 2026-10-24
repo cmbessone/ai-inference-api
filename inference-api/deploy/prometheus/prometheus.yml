@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # Cada réplica se scrapea por separado (descubiertas por DNS): las métricas son por proceso y
+  # Prometheus las agrega con sum()/histogram_quantile() en las queries.
+  - job_name: inference-api
+    dns_sd_configs:
+      - names: ["api"]
+        type: A
+        port: 8000

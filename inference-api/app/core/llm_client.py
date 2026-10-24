@@ -20,7 +20,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from app.core.circuit_breaker import CircuitBreaker
+from app.core.circuit_breaker import CircuitBreaker, CircuitState
 from app.core.clock import Clock
 from app.core.errors import (
     LLMProviderError,
@@ -174,10 +174,10 @@ class ResilientLLMClient:
         self._metrics.llm_calls.labels(self.provider_name, "success").inc()
         await self._breaker.record_success()
 
-    async def circuit_state(self) -> str:
+    async def circuit_state(self) -> CircuitState:
         status = await self._breaker.status()
         self._metrics.set_circuit_state(status.state.value)
-        return status.state.value
+        return status.state
 
     async def aclose(self) -> None:
         await self._provider.aclose()

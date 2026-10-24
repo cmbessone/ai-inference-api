@@ -5,7 +5,11 @@ import uuid
 import httpx
 import pytest
 
-from app.api.middleware.request_context import classify_outcome, resolve_request_id
+from app.api.middleware.request_context import (
+    classify_outcome,
+    metric_route_label,
+    resolve_request_id,
+)
 
 
 def test_resolve_request_id_reuses_safe_incoming_id() -> None:
@@ -45,3 +49,15 @@ async def test_liveness(client: httpx.AsyncClient) -> None:
     response = await client.get("/health/live")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_metric_route_label_bounds_cardinality() -> None:
+    """OB-AC07: los 404 no generan una serie por path."""
+
+    class Route:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+    assert metric_route_label("/v1/infer", Route("/infer")) == "/v1/infer"
+    assert metric_route_label("/items/42", Route("/items/{item_id}")) == "/items/{item_id}"
+    assert metric_route_label("/wp-admin.php", None) == "unmatched"

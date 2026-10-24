@@ -50,6 +50,19 @@ def classify_outcome(status_code: int, override: Outcome | None) -> Outcome:
     return "success" if status_code < 400 else "error"
 
 
+def metric_route_label(path: str, route: object | None) -> str:
+    """Label de ruta con cardinalidad acotada (pura).
+
+    Sin match (404, escaneos) → "unmatched"; nunca el path crudo, que es input del atacante.
+    Rutas con parámetros → la plantilla. Rutas estáticas → el path completo (en FastAPI ≥ 0.16x
+    `route.path` es relativo al router que la incluye y perdería el prefijo `/v1`).
+    """
+    if route is None:
+        return "unmatched"
+    template: str = getattr(route, "path", path)
+    return template if "{" in template else path
+
+
 def header_value(scope: Scope, name: bytes) -> str | None:
     for key, value in scope.get("headers", []):
         if key.lower() == name:
@@ -116,8 +129,7 @@ class RequestContextMiddleware:
 
     def _record(self, scope: Scope, ctx: RequestContext, status_code: int, elapsed: float) -> None:
         path: str = scope.get("path", "")
-        route = scope.get("route")
-        route_path: str = getattr(route, "path", path)
+        route_path = metric_route_label(path, scope.get("route"))
         if self._observer is not None:
             self._observer.observe(scope.get("method", ""), route_path, status_code, elapsed)
         if path in _SILENT_PATHS:

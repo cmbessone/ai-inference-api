@@ -35,12 +35,12 @@ Cada tarea referencia los criterios de aceptación que cubre. `[x]` = implementa
 - [x] T24 `MicroBatcher` (R3-AC09)
 
 ## PR #5 — Operación
-- [ ] T25 Load shedding ASGI (RS-AC10)
-- [ ] T26 Métricas Prometheus (OB-AC07)
-- [ ] T27 `/health` y `/health/ready` (OB-AC04, OB-AC06)
-- [ ] T28 Dockerfile multi-stage, compose con 3 réplicas + nginx + redis (RS-AC14)
-- [ ] T29 Graceful shutdown (RS-AC13)
-- [ ] T30 Locust + resultados (OB-AC08)
+- [x] T25 Load shedding ASGI (RS-AC10)
+- [x] T26 Métricas Prometheus (OB-AC07)
+- [x] T27 `/health` y `/health/ready` (OB-AC04, OB-AC06)
+- [x] T28 Dockerfile multi-stage, compose con 3 réplicas + nginx + redis (RS-AC14)
+- [x] T29 Graceful shutdown (RS-AC13)
+- [x] T30 Locust + resultados (OB-AC08)
 
 ## PR #6 — Documentación
 - [ ] T31 `DECISIONS.md` con ADRs y escenarios A/B/C

@@ -197,6 +197,8 @@ class Container:
     async def start(self) -> None:
         self.audit.start()
         self.classification.start()
+        await self.classification.warmup()
+        await self.redis.ping()  # abre el pool antes del primer request (no falla si Redis cae)
         self.lifecycle.ready = True
 
     async def aclose(self) -> None:

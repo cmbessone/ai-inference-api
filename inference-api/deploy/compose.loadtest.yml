@@ -1,0 +1,6 @@
+# Override para pruebas de carga: un solo cliente de locust genera ~100 RPS, así que se sube el
+# rate limit (acá se mide capacidad del sistema, no la cuota por cliente).
+services:
+  api:
+    environment:
+      RATE_LIMIT_REQUESTS: "100000"

@@ -15,9 +15,10 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI
 
 from app.api.errors import register_error_handlers
+from app.api.middleware.load_shedding import LoadSheddingMiddleware
 from app.api.middleware.rate_limit import enforce_rate_limit
 from app.api.middleware.request_context import RequestContextMiddleware
-from app.api.routes import classify, health, infer, stream
+from app.api.routes import classify, health, infer, metrics, stream
 from app.config import Settings, get_settings
 from app.container import Container
 from app.core.observability.logging import configure_logging, get_logger
@@ -47,11 +48,11 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
-    metrics = Metrics()
+    registry = Metrics()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        container = await container_factory(settings, metrics)
+        container = await container_factory(settings, registry)
         app.state.container = container
         await container.start()
         logger.info("startup_complete", service=settings.service_name, env=settings.environment)
@@ -69,6 +70,11 @@ def create_app(
     )
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(metrics.router)
     app.include_router(build_v1_router())
-    app.add_middleware(RequestContextMiddleware, observer=metrics)
+    # El último agregado es el más externo: el contexto/log envuelve también a los rechazos 503.
+    app.add_middleware(
+        LoadSheddingMiddleware, max_inflight=settings.max_inflight_requests, metrics=registry
+    )
+    app.add_middleware(RequestContextMiddleware, observer=registry)
     return app
